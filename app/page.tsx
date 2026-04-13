@@ -50,7 +50,7 @@ export default function HomePage() {
       .then(r => r.json())
       .then((data: District[]) => {
         setDistricts(data)
-        const cityList = [...new Set(data.map(d => d.시군명))].sort()
+        const cityList = Array.from(new Set(data.map(d => d.시군명))).sort()
         setCities(cityList)
         if (cityList.length > 0) setSelectedCity(cityList[0])
       })
