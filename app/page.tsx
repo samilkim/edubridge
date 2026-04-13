@@ -314,6 +314,16 @@ export default function HomePage() {
                     </button>
                   </div>
 
+                  {/* 외부 지역 안내 */}
+                  {lecture.is_external && (
+                    <div
+                      className="text-xs px-3 py-1.5 rounded-lg text-center"
+                      style={{ background: 'rgba(251,191,36,0.08)', color: 'rgba(251,191,36,0.8)', border: '1px solid rgba(251,191,36,0.15)' }}
+                    >
+                      📍 {lecture.시군명} 위치 — 인근 지역 추천 강좌
+                    </div>
+                  )}
+
                   {/* 똑버스 */}
                   {lecture.is_external ? (
                     <button

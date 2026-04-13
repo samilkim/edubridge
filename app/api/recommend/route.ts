@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getLectures, getDistricts } from '@/lib/data'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// 양방향으로 확장된 인접 지역 맵
+// 인접 지역 맵
 const NEIGHBOR_MAP: Record<string, string[]> = {
   연천군: ['동두천시', '포천시', '파주시', '양주시'],
-  가평군: ['포천시', '남양주시', '양평군'],
+  가평군: ['포천시', '남양주시', '양평군', '춘천시'],
   양평군: ['가평군', '여주시', '남양주시', '광주시'],
   여주시: ['양평군', '이천시', '광주시'],
   포천시: ['연천군', '가평군', '동두천시', '양주시'],
@@ -19,9 +19,23 @@ const NEIGHBOR_MAP: Record<string, string[]> = {
   용인시: ['수원시', '화성시', '안성시', '광주시', '이천시'],
   평택시: ['화성시', '안성시', '오산시'],
   오산시: ['수원시', '화성시', '평택시'],
+  남양주시: ['가평군', '양평군', '구리시', '하남시'],
+  구리시: ['남양주시', '하남시', '성남시'],
+  하남시: ['남양주시', '구리시', '성남시', '광주시'],
+  광주시: ['하남시', '성남시', '용인시', '여주시', '양평군'],
+  성남시: ['구리시', '하남시', '광주시', '용인시', '의왕시'],
+  의왕시: ['수원시', '성남시', '군포시', '안양시'],
+  군포시: ['수원시', '안산시', '의왕시', '안양시'],
+  안양시: ['의왕시', '군포시', '과천시', '광명시'],
+  과천시: ['안양시', '성남시'],
+  광명시: ['시흥시', '안양시'],
+  부천시: ['시흥시', '광명시'],
+  고양시: ['양주시', '파주시'],
+  파주시: ['연천군', '양주시', '고양시'],
+  의정부시: ['양주시', '남양주시'],
+  이천시: ['여주시', '안성시', '용인시'],
 }
 
-/** 두 도시가 인접한지 양방향으로 체크 */
 function isNeighbor(city1: string, city2: string): boolean {
   return (
     NEIGHBOR_MAP[city1]?.includes(city2) ||
@@ -30,12 +44,57 @@ function isNeighbor(city1: string, city2: string): boolean {
   )
 }
 
+// ─── TF-IDF 코사인 유사도 ───────────────────────────────────────────────────
+
+function tokenize(text: string): string[] {
+  return text.toLowerCase().split(/[\s,.\-()[\]]+/).filter(w => w.length >= 2)
+}
+
+/** IDF 계산: log(N / df) */
+function buildIDF(docs: string[][]): Map<string, number> {
+  const N = docs.length
+  const df = new Map<string, number>()
+  for (const tokens of docs) {
+    for (const term of new Set(tokens)) {
+      df.set(term, (df.get(term) ?? 0) + 1)
+    }
+  }
+  const idf = new Map<string, number>()
+  for (const [term, count] of df) {
+    idf.set(term, Math.log(N / count + 1))
+  }
+  return idf
+}
+
+/** TF-IDF 벡터 계산 */
+function tfidfVector(tokens: string[], idf: Map<string, number>): Map<string, number> {
+  const tf = new Map<string, number>()
+  for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1)
+  const vec = new Map<string, number>()
+  for (const [term, count] of tf) {
+    vec.set(term, (count / tokens.length) * (idf.get(term) ?? 1))
+  }
+  return vec
+}
+
+/** 코사인 유사도 */
+function cosine(a: Map<string, number>, b: Map<string, number>): number {
+  let dot = 0, normA = 0, normB = 0
+  for (const [t, v] of a) { dot += v * (b.get(t) ?? 0); normA += v * v }
+  for (const [, v] of b) normB += v * v
+  return normA === 0 || normB === 0 ? 0 : dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
     const { query, city, district } = await req.json()
 
     const lectures = getLectures()
     const districts = getDistricts()
+
+    console.log(`[recommend] city=${city}, district=${district}, query=${query}, total=${lectures.length}`)
 
     const vulRow = districts.find(d => d.시군명 === city && d.구 === district)
     if (!vulRow) {
@@ -47,100 +106,168 @@ export async function POST(req: NextRequest) {
     let filtered = lectures.filter(l =>
       studentKeywords.some(kw => l.search_text?.includes(kw))
     )
-    if (filtered.length < 10) filtered = lectures
+    if (filtered.length < 5) filtered = lectures
+    console.log(`[recommend] filtered=${filtered.length}`)
 
     // 2단계: Gemini 키워드 확장
-    let aiKeywords = query
+    let queryExpanded = query
     let geminiWorking = false
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
+
     try {
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-      const kwResult = await model.generateContent(
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const kwRes = await model.generateContent(
         `질문: '${query}'. 이와 관련된 학생용 디지털 기술 키워드 3개만 쉼표로 답해줘. 다른 말은 하지 마.`
       )
-      aiKeywords = kwResult.response.text().trim()
+      const aiKW = kwRes.response.text().trim()
+      queryExpanded = query + ' ' + aiKW
       geminiWorking = true
-    } catch {
-      // Gemini 실패 시 원본 쿼리로 진행
+      console.log(`[recommend] Gemini keywords: ${aiKW}`)
+    } catch (e) {
+      console.error('[recommend] Gemini keyword expansion failed:', e)
     }
 
-    // 3단계: 유사도 점수 계산
-    const queryWords = (query + ' ' + aiKeywords)
-      .toLowerCase()
-      .split(/[\s,]+/)
-      .filter(Boolean)
+    // 3단계: TF-IDF 코사인 유사도 계산 (원본 로직 재현)
+    const corpus = filtered.map(l => l.search_text ?? '')
+    const tokenizedCorpus = corpus.map(tokenize)
+    const idf = buildIDF(tokenizedCorpus)
 
-    const withSim = filtered.map(lecture => {
-      const text = lecture.search_text ?? ''
-      const matchCount = queryWords.filter(w => text.includes(w)).length
-      const simScore = queryWords.length > 0 ? (matchCount / queryWords.length) * 100 : 0
-      const feeInfo = (String(lecture.수강료) + String(lecture.강좌내용)).toLowerCase()
+    const queryVec = tfidfVector(tokenize(queryExpanded), idf)
+
+    // 4단계: 원본 점수 공식 적용
+    // 코사인 유사도 50점 + 지역 30점 + 취약지수 20점 + 무료 보너스 10점
+    const vulScore = (vulRow.최종_취약지수 / 100) * 20
+
+    const scored = filtered.map((lecture, i) => {
+      const docVec = tfidfVector(tokenizedCorpus[i], idf)
+      const sim = cosine(queryVec, docVec)
+      const simScore = sim * 50
+
+      // 지역 점수: 같은 구=30, 같은 시군=25, 인접 시군=20, 기타=0
+      let regScore = 0
+      if (lecture.구 === district) {
+        regScore = 30
+      } else if (lecture.시군명 === city) {
+        regScore = 25
+      } else if (isNeighbor(city, lecture.시군명 ?? '')) {
+        regScore = 20
+      }
+
+      const feeInfo = (String(lecture.수강료 ?? '') + String(lecture.강좌내용 ?? '')).toLowerCase()
       const isFree = feeInfo.includes('무료') || lecture.수강료 === '0'
-      return { ...lecture, simScore, isFree }
+      const feeBonus = isFree ? 10 : 0
+
+      const totalScore = simScore + regScore + vulScore + feeBonus
+
+      return { ...lecture, totalScore, simScore, regScore, vulScore, feeBonus, isFree }
     })
 
-    // 4단계: 지역 우선 순위로 3개 선택
-    // 같은 구/동 → 같은 시/군 → 인접 시/군 → 기타 순으로 채움
-    const sameDistrict = withSim
-      .filter(l => l.시군명 === city && l.구 === district)
-      .sort((a, b) => (b.simScore + (b.isFree ? 10 : 0)) - (a.simScore + (a.isFree ? 10 : 0)))
+    // 지리 우선순위 풀로 분리 (같은 구 → 같은 시군 → 인접 시군 → 기타)
+    // 각 풀 내에서는 totalScore 내림차순
+    const poolSameDistrict = scored.filter(l => l.구 === district)
+      .sort((a, b) => b.totalScore - a.totalScore)
+    const poolSameCity = scored.filter(l => l.시군명 === city && l.구 !== district)
+      .sort((a, b) => b.totalScore - a.totalScore)
+    const poolNeighbor = scored.filter(l => l.시군명 !== city && isNeighbor(city, l.시군명 ?? ''))
+      .sort((a, b) => b.totalScore - a.totalScore)
+    const poolOthers = scored.filter(l => l.시군명 !== city && !isNeighbor(city, l.시군명 ?? ''))
+      .sort((a, b) => b.totalScore - a.totalScore)
 
-    const sameCity = withSim
-      .filter(l => l.시군명 === city && l.구 !== district)
-      .sort((a, b) => (b.simScore + (b.isFree ? 10 : 0)) - (a.simScore + (a.isFree ? 10 : 0)))
+    console.log(`[recommend] pools - sameDistrict:${poolSameDistrict.length}, sameCity:${poolSameCity.length}, neighbor:${poolNeighbor.length}, others:${poolOthers.length}`)
 
-    const neighborCity = withSim
-      .filter(l => l.시군명 !== city && isNeighbor(city, l.시군명))
-      .sort((a, b) => (b.simScore + (b.isFree ? 10 : 0)) - (a.simScore + (a.isFree ? 10 : 0)))
+    // 가까운 풀부터 채우되, 같은 도시 강좌가 있으면 최대 2개까지만 허용해 다양성 유지
+    const top3: typeof scored = []
+    const cityCount: Record<string, number> = {}
 
-    const others = withSim
-      .filter(l => l.시군명 !== city && !isNeighbor(city, l.시군명))
-      .sort((a, b) => (b.simScore + (b.isFree ? 10 : 0)) - (a.simScore + (a.isFree ? 10 : 0)))
-
-    // 순서대로 3개 채우기
-    const top3: typeof withSim = []
-    for (const pool of [sameDistrict, sameCity, neighborCity, others]) {
+    for (const pool of [poolSameDistrict, poolSameCity, poolNeighbor, poolOthers]) {
       for (const item of pool) {
         if (top3.length >= 3) break
-        top3.push(item)
+        const itemCity = item.시군명 ?? ''
+        const count = cityCount[itemCity] ?? 0
+        // 기타(먼 지역) 풀에서는 같은 도시 1개까지만 허용
+        const maxPerCity = pool === poolOthers ? 1 : 3
+        if (count < maxPerCity) {
+          top3.push(item)
+          cityCount[itemCity] = count + 1
+        }
       }
       if (top3.length >= 3) break
     }
 
-    // 5단계: Gemini 추천 사유 생성
-    let reasons: string[] = []
+    // 그래도 3개 미만이면 제한 없이 채우기
+    if (top3.length < 3) {
+      const added = new Set(top3)
+      for (const pool of [poolSameDistrict, poolSameCity, poolNeighbor, poolOthers]) {
+        for (const item of pool) {
+          if (top3.length >= 3) break
+          if (!added.has(item)) { top3.push(item); added.add(item) }
+        }
+        if (top3.length >= 3) break
+      }
+    }
+
+    console.log(`[recommend] top3: ${top3.map(l => `${l.강좌명?.slice(0,15)}(${l.시군명}, 총${l.totalScore.toFixed(1)}=sim${l.simScore.toFixed(1)}+reg${l.regScore})`).join(' | ')}`)
+
+    // 5단계: Gemini 추천 사유 생성 (1회 호출)
+    const reasons: string[] = []
     try {
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-      const names = top3.map(l => l.강좌명).join(', ')
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const lectureList = top3.map((l, i) => {
+        const name = l.강좌명 ?? '강좌'
+        const content = String(l.강좌내용 ?? '').slice(0, 150)
+        const cityInfo = l.시군명 !== city ? ` [${l.시군명} 위치]` : ''
+        return `${i + 1}. ${name}${cityInfo}: ${content}`
+      }).join('\n')
+
       const result = await model.generateContent(
-        `학생의 질문: "${query}"\n다음 강좌가 왜 좋은지 각각 한 문장씩 친절하게 설명해줘. 형식: 강좌명: 이유\n강좌들: ${names}`
+        `학생 질문: "${query}"
+
+추천 강좌 목록:
+${lectureList}
+
+위 강좌들이 학생 질문에 왜 도움이 되는지 각각 다르게 한 문장씩 설명해줘.
+형식 (반드시 지켜줘):
+1: [이유]
+2: [이유]
+3: [이유]
+다른 말은 하지 마.`
       )
-      reasons = result.response.text().trim().split('\n').filter(Boolean)
-    } catch {
-      // Gemini 실패 시 기본 사유 사용
+      const text = result.response.text().trim()
+      console.log(`[recommend] reasons: ${text.slice(0, 200)}`)
+      geminiWorking = true
+
+      const lines = text.split('\n').filter(Boolean)
+      for (let i = 0; i < top3.length; i++) {
+        const match = lines.find(l => l.startsWith(`${i + 1}:`))
+        reasons.push(match ? match.replace(/^\d+:\s*/, '').trim() : '')
+      }
+    } catch (e) {
+      console.error('[recommend] Gemini reasons failed:', e)
     }
 
     const results = top3.map((lecture, i) => {
-      let reason = '학생의 미래 역량을 키워줄 좋은 강좌입니다.'
-      for (const line of reasons) {
-        if (lecture.강좌명 && line.includes(lecture.강좌명) && line.includes(':')) {
-          reason = line.split(':', 2)[1]?.trim() ?? reason
-          break
-        }
-      }
+      const lectureName = lecture.강좌명 ?? '이 강좌'
+      const cityInfo = lecture.시군명 !== city ? ` (${lecture.시군명} 위치)` : ''
+      const defaultReason = `${lectureName}${cityInfo}는 "${query}"와 관련된 디지털 역량을 키울 수 있는 강좌입니다.`
       return {
         ...lecture,
         rank: i + 1,
-        reason,
-        is_external: lecture.시군명 !== city, // 구 기준이 아닌 시/군 기준으로 변경
+        reason: reasons[i] || defaultReason,
+        is_external: lecture.시군명 !== city,
         is_free: lecture.isFree,
+        score_detail: {
+          sim: lecture.simScore.toFixed(1),
+          region: lecture.regScore,
+          vuln: lecture.vulScore.toFixed(1),
+          free: lecture.feeBonus,
+          total: lecture.totalScore.toFixed(1),
+        },
       }
     })
 
     return NextResponse.json({ results, vuln: vulRow, geminiWorking })
   } catch (error) {
-    console.error('Recommendation error:', error)
+    console.error('[recommend] Error:', error)
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }
