@@ -89,7 +89,18 @@ function cosine(a: Map<string, number>, b: Map<string, number>): number {
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, city, district } = await req.json()
+    const body = await req.json()
+
+    // 입력 검증 및 정제
+    const query: string = typeof body.query === 'string'
+      ? body.query.replace(/[<>"'`\\]/g, '').trim().slice(0, 200)
+      : ''
+    const city: string = typeof body.city === 'string' ? body.city.trim().slice(0, 50) : ''
+    const district: string = typeof body.district === 'string' ? body.district.trim().slice(0, 50) : ''
+
+    if (!query || !city || !district) {
+      return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 })
+    }
 
     const lectures = getLectures()
     const districts = getDistricts()
@@ -101,13 +112,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '지역 정보를 찾을 수 없습니다.' }, { status: 400 })
     }
 
-    // 1단계: 학생 관련 강좌 필터링
-    const studentKeywords = ['학생', '청소년', '초등', '중등', '고등', '어린이', '꿈나무', '학교']
-    let filtered = lectures.filter(l =>
-      studentKeywords.some(kw => l.search_text?.includes(kw))
-    )
+    // 1단계: 학생 강좌 필터링 (성인/학부모 강좌 제외)
+    const studentKeywords = ['학생', '청소년', '초등', '중등', '고등', '어린이', '꿈나무', '학교', '청년', '방과후']
+    const adultExcludeKeywords = ['학부모', '부모님', '학부형', '시니어', '어르신', '중장년', '노인', '어머니', '아버지', '성인반', '성인 대상', '학부모님']
+    let filtered = lectures.filter(l => {
+      const text = l.search_text ?? ''
+      const hasStudentKW = studentKeywords.some(kw => text.includes(kw))
+      const hasAdultKW = adultExcludeKeywords.some(kw => text.includes(kw))
+      return hasStudentKW && !hasAdultKW
+    })
+    if (filtered.length < 5) filtered = lectures.filter(l => {
+      // 성인 제외 키워드는 유지하되 학생 키워드 조건만 완화
+      const text = l.search_text ?? ''
+      return !adultExcludeKeywords.some(kw => text.includes(kw))
+    })
     if (filtered.length < 5) filtered = lectures
-    console.log(`[recommend] filtered=${filtered.length}`)
+
+    // 강좌명 기준 중복 제거 (동일 강좌명 중 첫 번째만 유지)
+    const seenNames = new Set<string>()
+    filtered = filtered.filter(l => {
+      const name = (l.강좌명 ?? '').trim()
+      if (seenNames.has(name)) return false
+      seenNames.add(name)
+      return true
+    })
+    console.log(`[recommend] filtered(dedup)=${filtered.length}`)
 
     // 2단계: Gemini 키워드 확장
     let queryExpanded = query
@@ -175,32 +204,38 @@ export async function POST(req: NextRequest) {
 
     console.log(`[recommend] pools - sameDistrict:${poolSameDistrict.length}, sameCity:${poolSameCity.length}, neighbor:${poolNeighbor.length}, others:${poolOthers.length}`)
 
-    // 가까운 풀부터 채우되, 같은 도시 강좌가 있으면 최대 2개까지만 허용해 다양성 유지
+    // 가까운 풀부터 채우되, 강좌명 중복 및 도시 편중 방지
     const top3: typeof scored = []
     const cityCount: Record<string, number> = {}
+    const usedNames = new Set<string>()
 
     for (const pool of [poolSameDistrict, poolSameCity, poolNeighbor, poolOthers]) {
       for (const item of pool) {
         if (top3.length >= 3) break
+        const itemName = (item.강좌명 ?? '').trim()
         const itemCity = item.시군명 ?? ''
         const count = cityCount[itemCity] ?? 0
-        // 기타(먼 지역) 풀에서는 같은 도시 1개까지만 허용
         const maxPerCity = pool === poolOthers ? 1 : 3
-        if (count < maxPerCity) {
+        // 강좌명 중복 제거 + 도시 편중 방지
+        if (!usedNames.has(itemName) && count < maxPerCity) {
           top3.push(item)
           cityCount[itemCity] = count + 1
+          usedNames.add(itemName)
         }
       }
       if (top3.length >= 3) break
     }
 
-    // 그래도 3개 미만이면 제한 없이 채우기
+    // 3개 미만이면 제한 완화해서 채우기
     if (top3.length < 3) {
-      const added = new Set(top3)
       for (const pool of [poolSameDistrict, poolSameCity, poolNeighbor, poolOthers]) {
         for (const item of pool) {
           if (top3.length >= 3) break
-          if (!added.has(item)) { top3.push(item); added.add(item) }
+          const itemName = (item.강좌명 ?? '').trim()
+          if (!usedNames.has(itemName)) {
+            top3.push(item)
+            usedNames.add(itemName)
+          }
         }
         if (top3.length >= 3) break
       }
@@ -268,6 +303,6 @@ ${lectureList}
     return NextResponse.json({ results, vuln: vulRow, geminiWorking })
   } catch (error) {
     console.error('[recommend] Error:', error)
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    return NextResponse.json({ error: '추천 처리 중 오류가 발생했습니다.' }, { status: 500 })
   }
 }
