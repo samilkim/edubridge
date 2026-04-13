@@ -43,6 +43,7 @@ export default function HomePage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [reservationTarget, setReservationTarget] = useState<LectureResult | null>(null)
   const [toast, setToast] = useState('')
+  const [geminiWorking, setGeminiWorking] = useState<boolean | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function HomePage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResults(data.results)
+      setGeminiWorking(data.geminiWorking ?? false)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -227,11 +229,25 @@ export default function HomePage() {
         {/* 결과 */}
         {!loading && results.length > 0 && (
           <div className="mb-12 animate-slide-up">
-            <h2 className="text-lg font-bold text-white mb-5">
-              🎯{' '}
-              <span className="text-white/60">{selectedDistrict}</span>
-              {' '}학생을 위한 AI 추천 강좌
-            </h2>
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+              <h2 className="text-lg font-bold text-white">
+                🎯{' '}
+                <span className="text-white/60">{selectedDistrict}</span>
+                {' '}학생을 위한 AI 추천 강좌
+              </h2>
+              {geminiWorking !== null && (
+                <span
+                  className="text-xs px-3 py-1 rounded-full font-medium"
+                  style={
+                    geminiWorking
+                      ? { background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)' }
+                      : { background: 'rgba(234,179,8,0.12)', color: '#facc15', border: '1px solid rgba(234,179,8,0.2)' }
+                  }
+                >
+                  {geminiWorking ? '✓ Gemini AI 연결됨' : '⚠ AI 없이 추천 (기본 알고리즘)'}
+                </span>
+              )}
+            </div>
             <div className="grid md:grid-cols-3 gap-5">
               {results.map((lecture, i) => (
                 <div
