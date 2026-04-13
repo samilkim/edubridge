@@ -9,10 +9,19 @@ export default function SignupPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
+    if (digits.length <= 3) return digits
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+  }
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,6 +29,14 @@ export default function SignupPage() {
 
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       setError('아이디는 영문, 숫자, 밑줄(_)만 사용 가능하며 3~20자여야 합니다.')
+      return
+    }
+    if (fullName.trim().length < 2) {
+      setError('이름을 2자 이상 입력해주세요.')
+      return
+    }
+    if (!/^010-\d{4}-\d{4}$/.test(phone)) {
+      setError('핸드폰 번호를 올바르게 입력해주세요. (예: 010-1234-5678)')
       return
     }
     if (password.length < 6) {
@@ -36,23 +53,22 @@ export default function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: `${username}@edubridge.local`,
       password,
-      options: { data: { username } },
+      options: { data: { username, full_name: fullName.trim(), phone } },
     })
 
     if (signUpError) {
-      // 이미 사용 중인 아이디
-      if (signUpError.message.includes('already registered')) {
-        setError('이미 사용 중인 아이디입니다.')
-      } else {
-        setError(signUpError.message)
-      }
+      setError(signUpError.message.includes('already registered') ? '이미 사용 중인 아이디입니다.' : signUpError.message)
       setLoading(false)
       return
     }
 
-    // profiles 테이블에 사용자명 저장
     if (data.user) {
-      await supabase.from('profiles').upsert({ id: data.user.id, username })
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        username,
+        full_name: fullName.trim(),
+        phone,
+      })
     }
 
     setLoading(false)
@@ -61,9 +77,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
-
         <div
           className="p-8"
           style={{
@@ -95,6 +110,34 @@ export default function SignupPage() {
                 autoComplete="username"
               />
             </div>
+
+            <div>
+              <label className="block text-xs text-white/50 mb-2 font-medium">이름</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="실명 입력"
+                className="glass-input"
+                required
+                autoComplete="name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-white/50 mb-2 font-medium">핸드폰 번호</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(formatPhone(e.target.value))}
+                placeholder="010-0000-0000"
+                className="glass-input"
+                required
+                autoComplete="tel"
+                maxLength={13}
+              />
+            </div>
+
             <div>
               <label className="block text-xs text-white/50 mb-2 font-medium">
                 비밀번호 <span className="text-white/25">(6자 이상)</span>
@@ -109,6 +152,7 @@ export default function SignupPage() {
                 autoComplete="new-password"
               />
             </div>
+
             <div>
               <label className="block text-xs text-white/50 mb-2 font-medium">비밀번호 확인</label>
               <input
@@ -131,11 +175,7 @@ export default function SignupPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 mt-2"
-            >
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3 mt-2">
               {loading ? '가입 중...' : '회원가입'}
             </button>
           </form>

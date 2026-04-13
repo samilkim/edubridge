@@ -55,7 +55,6 @@ export default function HomePage() {
         setCities(cityList)
         if (cityList.length > 0) setSelectedCity(cityList[0])
       })
-
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null))
     return () => subscription.unsubscribe()
@@ -63,24 +62,16 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!selectedCity) return
-    const dists = districts
-      .filter(d => d.시군명 === selectedCity)
-      .map(d => d.구)
-      .sort()
+    const dists = districts.filter(d => d.시군명 === selectedCity).map(d => d.구).sort()
     setDistrictOptions(dists)
     setSelectedDistrict(dists[0] ?? '')
   }, [selectedCity, districts])
 
-  const currentVuln = districts.find(
-    d => d.시군명 === selectedCity && d.구 === selectedDistrict
-  )
+  const currentVuln = districts.find(d => d.시군명 === selectedCity && d.구 === selectedDistrict)
 
   const handleSearch = async () => {
     if (!query.trim()) return
-    setLoading(true)
-    setError('')
-    setResults([])
-    setSearched(true)
+    setLoading(true); setError(''); setResults([]); setSearched(true)
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
@@ -167,21 +158,13 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs text-white/50 mb-2 font-medium">시 / 군</label>
-              <select
-                value={selectedCity}
-                onChange={e => setSelectedCity(e.target.value)}
-                className="glass-input"
-              >
+              <select value={selectedCity} onChange={e => setSelectedCity(e.target.value)} className="glass-input">
                 {cities.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs text-white/50 mb-2 font-medium">구 / 동</label>
-              <select
-                value={selectedDistrict}
-                onChange={e => setSelectedDistrict(e.target.value)}
-                className="glass-input"
-              >
+              <select value={selectedDistrict} onChange={e => setSelectedDistrict(e.target.value)} className="glass-input">
                 {districtOptions.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
@@ -196,11 +179,7 @@ export default function HomePage() {
                   placeholder="예: 파이썬으로 게임 만들고 싶어요"
                   className="glass-input flex-1"
                 />
-                <button
-                  onClick={handleSearch}
-                  disabled={loading || !query.trim()}
-                  className="btn-primary px-5 whitespace-nowrap shrink-0"
-                >
+                <button onClick={handleSearch} disabled={loading || !query.trim()} className="btn-primary px-5 whitespace-nowrap shrink-0">
                   {loading ? '분석 중...' : '✨ 찾기'}
                 </button>
               </div>
@@ -210,10 +189,7 @@ export default function HomePage() {
 
         {/* 에러 */}
         {error && (
-          <div
-            className="p-4 mb-6 rounded-xl text-sm text-red-400"
-            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}
-          >
+          <div className="p-4 mb-6 rounded-xl text-sm text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
             ⚠️ {error}
           </div>
         )}
@@ -231,9 +207,7 @@ export default function HomePage() {
           <div className="mb-12 animate-slide-up">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
               <h2 className="text-lg font-bold text-white">
-                🎯{' '}
-                <span className="text-white/60">{selectedDistrict}</span>
-                {' '}학생을 위한 AI 추천 강좌
+                🎯 <span className="text-white/60">{selectedDistrict}</span> 학생을 위한 AI 추천 강좌
               </h2>
               {geminiWorking !== null && (
                 <span
@@ -261,47 +235,36 @@ export default function HomePage() {
                     borderRadius: '20px',
                   }}
                 >
-                  {/* 뱃지 */}
                   <div className="flex justify-between items-center">
-                    <span
-                      className="text-xs font-bold px-2.5 py-1 rounded-full"
-                      style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}
-                    >
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
                       BEST {lecture.rank}
                     </span>
                     {lecture.is_free && (
-                      <span
-                        className="text-xs font-bold px-2.5 py-1 rounded-full"
-                        style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}
-                      >
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}>
                         FREE
                       </span>
                     )}
                   </div>
 
-                  {/* 내용 */}
                   <div className="flex-1">
-                    <h3 className="text-white font-bold text-base leading-snug mb-2.5">
-                      {lecture.강좌명}
-                    </h3>
-                    <p className="text-white/45 text-sm leading-relaxed">
-                      💡 {lecture.reason}
-                    </p>
+                    <h3 className="text-white font-bold text-base leading-snug mb-2.5">{lecture.강좌명}</h3>
+                    <p className="text-white/45 text-sm leading-relaxed">💡 {lecture.reason}</p>
                   </div>
 
-                  <div className="text-xs text-white/30 font-medium">
-                    📍 {lecture.시군명} {lecture.구}
-                  </div>
+                  <div className="text-xs text-white/30 font-medium">📍 {lecture.시군명} {lecture.구}</div>
 
-                  {/* 버튼 */}
+                  {lecture.is_external && (
+                    <div
+                      className="text-xs px-3 py-1.5 rounded-lg text-center"
+                      style={{ background: 'rgba(251,191,36,0.08)', color: 'rgba(251,191,36,0.8)', border: '1px solid rgba(251,191,36,0.15)' }}
+                    >
+                      📍 {lecture.시군명} 위치 — 인근 지역 추천 강좌
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     {lecture.홈페이지주소 && (
-                      <a
-                        href={lecture.홈페이지주소}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-primary flex-1 text-sm py-2"
-                      >
+                      <a href={lecture.홈페이지주소} target="_blank" rel="noopener noreferrer" className="btn-primary flex-1 text-sm py-2">
                         상세 신청
                       </a>
                     )}
@@ -314,17 +277,6 @@ export default function HomePage() {
                     </button>
                   </div>
 
-                  {/* 외부 지역 안내 */}
-                  {lecture.is_external && (
-                    <div
-                      className="text-xs px-3 py-1.5 rounded-lg text-center"
-                      style={{ background: 'rgba(251,191,36,0.08)', color: 'rgba(251,191,36,0.8)', border: '1px solid rgba(251,191,36,0.15)' }}
-                    >
-                      📍 {lecture.시군명} 위치 — 인근 지역 추천 강좌
-                    </div>
-                  )}
-
-                  {/* 똑버스 */}
                   {lecture.is_external ? (
                     <button
                       onClick={() => {
@@ -332,10 +284,7 @@ export default function HomePage() {
                         setReservationTarget(lecture)
                       }}
                       className="w-full text-sm py-2.5 rounded-xl text-center transition-all"
-                      style={{
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: 'rgba(255,255,255,0.55)',
-                      }}
+                      style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.55)' }}
                       onMouseEnter={e => {
                         e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
                         e.currentTarget.style.color = '#fff'
@@ -356,7 +305,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* 검색했지만 결과 없을 때 */}
+        {/* 결과 없음 */}
         {!loading && searched && results.length === 0 && !error && (
           <div className="text-center py-16 text-white/30">
             <p className="text-4xl mb-3">🔍</p>
@@ -366,14 +315,7 @@ export default function HomePage() {
 
         {/* 취약지수 현황 */}
         {currentVuln && (
-          <div
-            className="p-6"
-            style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '20px',
-            }}
-          >
+          <div className="p-6" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px' }}>
             <h3 className="text-sm font-bold text-white/70 mb-5">
               📊 {selectedCity} {selectedDistrict} 교육 환경 현황
             </h3>
@@ -385,17 +327,9 @@ export default function HomePage() {
               ].map(stat => {
                 const level = vulnLevel(stat.value)
                 return (
-                  <div
-                    key={stat.label}
-                    className="text-center p-4 rounded-xl"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
-                  >
-                    <div className="text-3xl font-black text-white mb-1">
-                      {stat.value.toFixed(1)}
-                    </div>
-                    <div className="text-xs font-medium mb-1" style={{ color: level.color }}>
-                      {level.label}
-                    </div>
+                  <div key={stat.label} className="text-center p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <div className="text-3xl font-black text-white mb-1">{stat.value.toFixed(1)}</div>
+                    <div className="text-xs font-medium mb-1" style={{ color: level.color }}>{level.label}</div>
                     <div className="text-xs text-white/35">{stat.label}</div>
                   </div>
                 )
@@ -420,7 +354,7 @@ export default function HomePage() {
         />
       )}
 
-      {/* 토스트 알림 */}
+      {/* 토스트 */}
       {toast && (
         <div
           className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-5 py-3 text-sm font-medium text-white animate-slide-up whitespace-nowrap"

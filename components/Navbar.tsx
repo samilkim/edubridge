@@ -19,7 +19,6 @@ export default function Navbar() {
       setUser(user)
       if (user?.email) setUsername(user.email.replace('@edubridge.local', ''))
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
       if (session?.user?.email) {
@@ -55,12 +54,10 @@ export default function Navbar() {
           borderRadius: '16px',
         }}
       >
-        {/* 로고 */}
         <Link href="/" className="font-black text-white text-lg tracking-tight">
           🛡️ 에듀브릿지
         </Link>
 
-        {/* 데스크톱 링크 */}
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map(link => (
             <Link
@@ -77,7 +74,6 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* 인증 버튼 */}
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
@@ -91,44 +87,30 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link
-                href="/auth/login"
-                className="text-sm text-white/50 hover:text-white transition-colors"
-              >
+              <Link href="/auth/login" className="text-sm text-white/50 hover:text-white transition-colors">
                 로그인
               </Link>
-              <Link
-                href="/auth/signup"
-                className="text-sm bg-white text-black font-semibold px-4 py-1.5 rounded-xl hover:bg-white/90 transition-colors"
-              >
+              <Link href="/auth/signup" className="text-sm bg-white text-black font-semibold px-4 py-1.5 rounded-xl hover:bg-white/90 transition-colors">
                 회원가입
               </Link>
             </>
           )}
         </div>
 
-        {/* 모바일 메뉴 토글 */}
         <button
           className="md:hidden text-white/60 hover:text-white p-1.5"
           onClick={() => setMenuOpen(v => !v)}
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             {menuOpen ? (
-              <path
-                fillRule="evenodd"
-                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              />
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
             ) : (
-              <path
-                fillRule="evenodd"
-                d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-              />
+              <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
             )}
           </svg>
         </button>
       </div>
 
-      {/* 모바일 드롭다운 */}
       {menuOpen && (
         <div
           className="md:hidden max-w-6xl mx-auto mt-2 p-4 flex flex-col gap-2"
@@ -146,9 +128,7 @@ export default function Navbar() {
               href={link.href}
               onClick={() => setMenuOpen(false)}
               className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                pathname === link.href
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/50 hover:text-white'
+                pathname === link.href ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'
               }`}
             >
               {link.label}
@@ -158,21 +138,14 @@ export default function Navbar() {
             {user ? (
               <>
                 <span className="text-white/30 text-xs px-4">{username}님 로그인 중</span>
-                <button
-                  onClick={() => { handleLogout(); setMenuOpen(false) }}
-                  className="btn-ghost text-sm py-2"
-                >
+                <button onClick={() => { handleLogout(); setMenuOpen(false) }} className="btn-ghost text-sm py-2">
                   로그아웃
                 </button>
               </>
             ) : (
               <>
-                <Link href="/auth/login" onClick={() => setMenuOpen(false)} className="btn-ghost text-sm py-2 text-center">
-                  로그인
-                </Link>
-                <Link href="/auth/signup" onClick={() => setMenuOpen(false)} className="btn-primary text-sm py-2 text-center">
-                  회원가입
-                </Link>
+                <Link href="/auth/login" onClick={() => setMenuOpen(false)} className="btn-ghost text-sm py-2 text-center">로그인</Link>
+                <Link href="/auth/signup" onClick={() => setMenuOpen(false)} className="btn-primary text-sm py-2 text-center">회원가입</Link>
               </>
             )}
           </div>
