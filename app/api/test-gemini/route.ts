@@ -9,7 +9,7 @@ export async function GET() {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
     const result = await model.generateContent('안녕하세요. "OK"라고만 답해주세요.')
     const text = result.response.text().trim()
     return NextResponse.json({ ok: true, response: text, keyPrefix: apiKey.slice(0, 8) + '...' })
