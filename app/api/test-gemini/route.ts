@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function GET() {
   const apiKey = process.env.GEMINI_API_KEY
@@ -7,10 +8,11 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
-    const data = await res.json()
-    const models = data.models?.map((m: { name: string }) => m.name) ?? []
-    return NextResponse.json({ ok: true, models })
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const result = await model.generateContent('안녕하세요. "OK"라고만 답해주세요.')
+    const text = result.response.text().trim()
+    return NextResponse.json({ ok: true, response: text, keyPrefix: apiKey.slice(0, 8) + '...' })
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) })
   }
