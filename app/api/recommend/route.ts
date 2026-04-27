@@ -113,8 +113,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 1단계: 학생 강좌 필터링 (성인/학부모 강좌 제외)
-    const studentKeywords = ['학생', '청소년', '초등', '중등', '고등', '어린이', '꿈나무', '학교', '청년', '방과후']
-    const adultExcludeKeywords = ['학부모', '부모님', '학부형', '시니어', '어르신', '중장년', '노인', '어머니', '아버지', '성인반', '성인 대상', '학부모님']
+    const studentKeywords = ['학생', '청소년', '중등', '고등', '학교', '청년', '방과후']
+    const adultExcludeKeywords = ['학부모', '부모님', '초등', '어린이', '학부형', '시니어', '어르신', '중장년', '노인', '어머니', '아버지', '성인반', '성인 대상', '학부모님']
     let filtered = lectures.filter(l => {
       const text = l.search_text ?? ''
       const hasStudentKW = studentKeywords.some(kw => text.includes(kw))
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log(`[recommend] top3: ${top3.map(l => `${l.강좌명?.slice(0,15)}(${l.시군명}, 총${l.totalScore.toFixed(1)}=sim${l.simScore.toFixed(1)}+reg${l.regScore})`).join(' | ')}`)
+    console.log(`[recommend] top3: ${top3.map(l => `${l.강좌명?.slice(0, 15)}(${l.시군명}, 총${l.totalScore.toFixed(1)}=sim${l.simScore.toFixed(1)}+reg${l.regScore})`).join(' | ')}`)
 
     // 5단계: Gemini 추천 사유 생성 (1회 호출)
     const reasons: string[] = []
