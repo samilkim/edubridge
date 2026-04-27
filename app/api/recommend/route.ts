@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
 
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
       const kwRes = await model.generateContent(
         `질문: '${query}'. 이와 관련된 학생용 디지털 기술 키워드 3개만 쉼표로 답해줘. 다른 말은 하지 마.`
       )
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
     // 5단계: Gemini 추천 사유 생성 (1회 호출)
     const reasons: string[] = []
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
       const lectureList = top3.map((l, i) => {
         const name = l.강좌명 ?? '강좌'
         const content = String(l.강좌내용 ?? '').slice(0, 150)
