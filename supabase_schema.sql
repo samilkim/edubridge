@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS bus_reservations (
   reserved_time   time NOT NULL,
   course_name     text DEFAULT '',
   voucher_eligible boolean DEFAULT false,
+  use_voucher     boolean DEFAULT false,
+  voucher_code    text DEFAULT '',
   status          text DEFAULT 'confirmed',
   created_at      timestamptz DEFAULT now()
 );
